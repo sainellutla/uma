@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uma"
+version = "0.1.0"
+description = "Uma — an AI infrastructure layer / MCP server that filters RAG context with a local cross-encoder before it reaches an LLM."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Uma" }]
+
+dependencies = [
+    "mcp>=1.2.0",
+    "sentence-transformers>=3.0.0",
+    "tiktoken>=0.7.0",
+    "rich>=13.7.0",
+    "openai>=1.40.0",
+    "python-dotenv>=1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[project.scripts]
+uma = "uma.cli.judge:main"
+uma-mcp = "uma.mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
