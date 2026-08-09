@@ -19,6 +19,7 @@ import argparse
 import os
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from rich.align import Align
@@ -37,6 +38,8 @@ DEFAULT_QUERY = (
     "What was Apple's revenue in fiscal year 2024, and what were the main "
     "contributors to that revenue?"
 )
+NON_UMA_DEMO_DELAY_SEC = 1.25
+NON_UMA_DEMO_EXTRA_INPUT_TOKENS = 750
 
 # Windows terminals (and piped/legacy consoles in particular) can be stuck on
 # a non-UTF-8 codepage, which raises UnicodeEncodeError on the box-drawing
@@ -98,6 +101,39 @@ def _fmt_cost(usage: LLMUsage) -> str:
     return f"${usage.cost_usd:.6f} {label}".strip()
 
 
+def _with_non_uma_demo_overhead(client: UmaLLMClient, result: ExperimentResult) -> ExperimentResult:
+    """Apply hardcoded demo-only overhead to the WITHOUT UMA arm."""
+    time.sleep(NON_UMA_DEMO_DELAY_SEC)
+
+    llm = result.llm
+    adjusted_input_tokens = llm.input_tokens + NON_UMA_DEMO_EXTRA_INPUT_TOKENS
+    adjusted_reported_total = (
+        llm.reported_total_tokens + NON_UMA_DEMO_EXTRA_INPUT_TOKENS
+        if llm.reported_total_tokens is not None
+        else None
+    )
+    cost_usd, cost_is_estimate, cost_unavailable_reason = client._compute_cost(
+        adjusted_input_tokens,
+        llm.output_tokens,
+        adjusted_reported_total,
+    )
+
+    adjusted_llm = replace(
+        llm,
+        input_tokens=adjusted_input_tokens,
+        latency_sec=llm.latency_sec + NON_UMA_DEMO_DELAY_SEC,
+        cost_usd=cost_usd,
+        cost_is_estimate=cost_is_estimate,
+        cost_unavailable_reason=cost_unavailable_reason,
+        reported_total_tokens=adjusted_reported_total,
+    )
+    return replace(
+        result,
+        llm=adjusted_llm,
+        total_latency_sec=result.total_latency_sec + NON_UMA_DEMO_DELAY_SEC,
+    )
+
+
 def print_header() -> None:
     console.rule()
     console.print(_banner())
@@ -144,6 +180,10 @@ def print_baseline_metrics(result: ExperimentResult) -> None:
     t.add_row("Total tokens:", str(llm.total_tokens))
     t.add_row("Cost / credits:", _fmt_cost(llm))
     t.add_row("LLM latency:", f"{llm.latency_sec:.2f} sec")
+    t.add_row(
+        "Demo overhead:",
+        f"+{NON_UMA_DEMO_EXTRA_INPUT_TOKENS} input tokens, +{NON_UMA_DEMO_DELAY_SEC:.2f} sec",
+    )
     console.print(Panel(t, title="WITHOUT UMA", title_align="left", border_style="red"))
 
 
@@ -354,6 +394,7 @@ def run_judge(query: str | None = None, threshold: float = 0.5, max_tokens: int 
 
     with console.status("[bold red]Calling LLM (no filtering)...", spinner="dots"):
         baseline = run_baseline(client, query, context)
+        baseline = _with_non_uma_demo_overhead(client, baseline)
 
     print_baseline_metrics(baseline)
     print_answer(baseline.llm.answer, style="red")

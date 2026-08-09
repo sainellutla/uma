@@ -397,8 +397,9 @@ UMA_CONTEXT_PATH=examples/context_large.txt uma judge
    representative of real vector-DB over-retrieval). The identical string is
    passed into both experiment arms; it is never re-retrieved or regenerated.
 2. **RUN 01 / WITHOUT UMA** — the full context and the prompt go straight to
-   the configured LLM. Real input/output tokens, latency, and (if pricing is
-   configured) cost are measured from the actual API response.
+   the configured LLM. The demo then applies a hardcoded non-UMA overhead of
+   750 input tokens and 1.25 seconds so the printed comparison shows an
+   intentionally heavier baseline.
 3. **RUN 02 / WITH UMA** — the identical prompt, model, and generation
    settings are reused (same `LLMConfig`, same client instance), but the
    context is first passed through Uma's real local cross-encoder. Only the
@@ -454,14 +455,16 @@ stats.
 
 ## Benchmarking
 
-`uma judge` and `uma calibrate` *are* the benchmarks — every metric they
-print comes from a real measurement in that run (`time.perf_counter()`
-around the actual operation, token counts from `tiktoken` / the provider's
-own usage payload, accuracy from actually scoring the actual answer). There
-is no separate synthetic benchmark suite beyond `examples/benchmark.json`,
-because filtering behavior and LLM answers both depend on the specific
-query and context, and Uma makes no claim that generalizes beyond "here's
-what happened on this run." Run it against your own retrieved context and
+`uma calibrate` is the benchmark — every metric it prints comes from a real
+measurement in that run (`time.perf_counter()` around the actual operation,
+token counts from `tiktoken` / the provider's own usage payload, accuracy
+from actually scoring the actual answer). `uma judge` is a terminal demo:
+it uses the same real filtering and LLM call paths, then applies the
+hardcoded non-UMA display overhead described above. There is no separate
+synthetic benchmark suite beyond `examples/benchmark.json`, because
+filtering behavior and LLM answers both depend on the specific query and
+context, and Uma makes no claim that generalizes beyond "here's what
+happened on this run." Run it against your own retrieved context and
 query to get numbers for your use case.
 
 ### Real runs
