@@ -374,9 +374,15 @@ def run_judge(query: str | None = None, threshold: float = 0.5, max_tokens: int 
     context, doc_count = load_context()
     context_tokens = count_tokens(context)
 
-    client = UmaLLMClient(config)  # ONE client/config shared by both arms.
-
+    # print_header() FIRST: everything below this point can be slow (the
+    # openai package is large and its first import can take a noticeable
+    # moment, especially cold/on a machine where antivirus scans each file
+    # as it's read) — showing the banner immediately means the terminal
+    # never looks dead/hung with zero feedback while that happens.
     print_header()
+
+    with console.status("[bold]Starting LLM client...", spinner="dots"):
+        client = UmaLLMClient(config)  # ONE client/config shared by both arms.
 
     # Warm up the local cross-encoder before timing anything. Loading model
     # weights from disk is a one-time process-startup cost, not part of the

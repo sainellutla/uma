@@ -59,9 +59,13 @@ def run_calibrate(
 
     thresholds = thresholds or DEFAULT_THRESHOLDS
     cases = _load_benchmark(benchmark_path)
-    client = UmaLLMClient(config)
 
+    # console.rule() FIRST, same reasoning as judge.py: constructing
+    # UmaLLMClient imports the (large, sometimes slow-to-import-cold)
+    # openai package, and doing that before anything is printed can make
+    # the terminal look completely hung with zero feedback.
     console.rule("[bold]UMA CALIBRATE[/bold]")
+    client = UmaLLMClient(config)
     console.print(
         Panel(
             f"Benchmark cases: {len(cases)}\n"
