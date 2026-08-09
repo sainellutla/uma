@@ -7,3 +7,5 @@ __pycache__/
 build/
 dist/
 .mypy_cache/
+render.exe
+render_dev.*

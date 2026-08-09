@@ -9,7 +9,7 @@ description = "Uma — an AI infrastructure layer / MCP server that filters RAG 
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Uma" }]
+authors = [{ name = "sainellutla" }]
 
 dependencies = [
     "mcp>=1.2.0",
@@ -24,6 +24,11 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+]
+# Only needed to run/deploy Uma Calibrate as a Render Workflow
+# (src/uma/render_workflows/). Not required for `uma judge` or `uma-mcp`.
+render = [
+    "render_sdk>=0.6.0",
 ]
 
 [project.scripts]
