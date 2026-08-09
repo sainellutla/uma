@@ -90,9 +90,14 @@ def filter_context(
     context:
         The raw retrieved context (e.g. concatenated RAG chunks).
     threshold:
-        Minimum sigmoid-normalized cross-encoder relevance score (0-1) a
-        sentence must reach to be retained. Default 0.5 means "the model
-        judges this sentence more relevant than not."
+        Minimum normalized relevance score (0-1, sigmoid of the cross-encoder's
+        raw logit) a sentence must reach to be retained. This is NOT a
+        calibrated probability — ms-marco-MiniLM-L-6-v2's model card
+        documents it as a ranking score, not "probability of relevance."
+        0.5 is simply Uma's default operating threshold, not "50% likely
+        relevant." See :mod:`uma.core.calibrate` (Uma Calibrate) to find a
+        threshold empirically for a specific workload instead of assuming
+        the default is right.
     max_tokens:
         If set, an optional hard token budget applied *after* threshold
         filtering. Sentences are kept in their original order and appended

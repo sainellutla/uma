@@ -22,10 +22,20 @@ cost as unavailable rather than guessing at a number.
 from __future__ import annotations
 
 import os
+import sys
 import time
 from dataclasses import dataclass
 
 from uma.core.metrics import LLMUsage
+
+# Retry-with-backoff on transient rate-limit errors. Uma Calibrate and
+# uma_calibrate (the Render Workflow) make many sequential real LLM calls
+# per benchmark run, which routinely hits free-tier per-minute request caps
+# — this is a real-world condition worth handling, not a hack for one demo.
+# The wait actually happens (this is not simulated), so it's reflected
+# honestly in the measured latency for whichever call triggered it.
+MAX_RATE_LIMIT_RETRIES = 3
+RATE_LIMIT_BACKOFF_SEC = 20.0
 
 SYSTEM_PROMPT = (
     "You are a precise assistant. Answer the user's question using ONLY the "
@@ -125,17 +135,16 @@ class UmaLLMClient:
         user_message = f"Context:\n{context}\n\nQuestion: {prompt}"
 
         params = self.config.generation_params()
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
+        ]
 
         start = time.perf_counter()
-        response = self._client.chat.completions.create(
-            model=params["model"],
-            temperature=params["temperature"],
-            max_tokens=params["max_tokens"],
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
-        )
+        response = self._create_with_retry(params, messages)
+        # Deliberately includes any real retry wait above — that time was
+        # actually spent getting this response, so hiding it would misstate
+        # the measured latency.
         latency_sec = time.perf_counter() - start
 
         usage = response.usage
@@ -159,6 +168,38 @@ class UmaLLMClient:
             cost_unavailable_reason=unavailable_reason,
             reported_total_tokens=reported_total,
         )
+
+    def _create_with_retry(self, params: dict, messages: list[dict]):
+        """Call chat.completions.create(), retrying on rate limits.
+
+        Free/low tiers of many providers (Gemini's free tier included, at
+        15 requests/minute for some models) reject bursts of sequential
+        calls — exactly what Uma Calibrate's per-threshold benchmark sweep
+        does. Retries with a fixed backoff up to MAX_RATE_LIMIT_RETRIES
+        times before giving up and raising.
+        """
+        from openai import RateLimitError
+
+        attempt = 0
+        while True:
+            try:
+                return self._client.chat.completions.create(
+                    model=params["model"],
+                    temperature=params["temperature"],
+                    max_tokens=params["max_tokens"],
+                    messages=messages,
+                )
+            except RateLimitError:
+                attempt += 1
+                if attempt > MAX_RATE_LIMIT_RETRIES:
+                    raise
+                wait_sec = RATE_LIMIT_BACKOFF_SEC * attempt
+                print(
+                    f"[uma] rate limited, retrying in {wait_sec:.0f}s "
+                    f"(attempt {attempt}/{MAX_RATE_LIMIT_RETRIES})",
+                    file=sys.stderr,
+                )
+                time.sleep(wait_sec)
 
     def _compute_cost(
         self,

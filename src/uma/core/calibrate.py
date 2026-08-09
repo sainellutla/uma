@@ -32,6 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from uma.core.filter import filter_context
+from uma.core.tokenizer import count_tokens
 from uma.llm.client import UmaLLMClient
 
 DEFAULT_THRESHOLDS: list[float] = [0.20, 0.35, 0.50, 0.65, 0.80]
@@ -194,11 +195,18 @@ def run_benchmark_at_threshold(
 
 
 def run_baseline_benchmark(cases: list[BenchmarkCase], llm_client: UmaLLMClient) -> ThresholdResult:
-    """WITHOUT UMA: every case's full, unfiltered context goes straight to the LLM."""
+    """WITHOUT UMA: every case's full, unfiltered context goes straight to the LLM.
+
+    Token counts here use the same tiktoken-based :func:`count_tokens` as
+    the threshold sweep (via ``filter_context``'s metrics), not the
+    provider's own reported ``input_tokens`` — different providers tokenize
+    differently, and mixing the two bases would make "avg_context_kept_percent"
+    compare apples to oranges between the baseline and the swept thresholds.
+    """
     results = []
     for case in cases:
         usage = llm_client.generate(prompt=case.question, context=case.context)
-        tokens = usage.input_tokens  # real measured tokens for the full-context call
+        tokens = count_tokens(case.context)
         results.append(
             CaseResult(
                 question=case.question,

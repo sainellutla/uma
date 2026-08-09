@@ -241,3 +241,75 @@ def test_generate_falls_back_to_local_sum_when_provider_omits_total(fake_openai)
     usage = client.generate(prompt="Q", context="C")
 
     assert usage.total_tokens == 150
+
+
+# --------------------------------------------------------------------------
+# Rate-limit retry (Uma Calibrate makes many sequential calls and routinely
+# hits free-tier per-minute caps — this is real-world behavior, not a hack
+# for one demo)
+# --------------------------------------------------------------------------
+
+
+def _make_rate_limit_error() -> Exception:
+    import httpx
+    from openai import RateLimitError
+
+    request = httpx.Request("POST", "https://example.invalid/v1/chat/completions")
+    response = httpx.Response(429, request=request, json={"error": {"message": "rate limited"}})
+    return RateLimitError("rate limited", response=response, body=None)
+
+
+class _FlakyCompletions:
+    """Raises RateLimitError a fixed number of times, then succeeds."""
+
+    def __init__(self, response, fail_times: int):
+        self._response = response
+        self._fail_times = fail_times
+        self.call_count = 0
+
+    def create(self, **kwargs):
+        self.call_count += 1
+        if self.call_count <= self._fail_times:
+            raise _make_rate_limit_error()
+        return self._response
+
+
+def test_generate_retries_on_rate_limit_then_succeeds(monkeypatch):
+    response = _FakeResponse("gpt-4o-mini", "Answer after retry.", 10, 5)
+    completions = _FlakyCompletions(response, fail_times=2)
+
+    class _Client:
+        def __init__(self, api_key=None, base_url=None):
+            self.chat = _FakeChat(completions)
+
+    monkeypatch.setattr("openai.OpenAI", _Client)
+    monkeypatch.setattr("time.sleep", lambda _seconds: None)  # don't actually wait in tests
+
+    config = LLMConfig("gpt-4o-mini", "sk-test", None, 0.0, 400, None, None)
+    client = UmaLLMClient(config)
+    usage = client.generate(prompt="Q", context="C")
+
+    assert usage.answer == "Answer after retry."
+    assert completions.call_count == 3  # 2 failures + 1 success
+
+
+def test_generate_gives_up_after_max_retries(monkeypatch):
+    response = _FakeResponse("gpt-4o-mini", "unreachable", 10, 5)
+    completions = _FlakyCompletions(response, fail_times=999)
+
+    class _Client:
+        def __init__(self, api_key=None, base_url=None):
+            self.chat = _FakeChat(completions)
+
+    monkeypatch.setattr("openai.OpenAI", _Client)
+    monkeypatch.setattr("time.sleep", lambda _seconds: None)
+
+    config = LLMConfig("gpt-4o-mini", "sk-test", None, 0.0, 400, None, None)
+    client = UmaLLMClient(config)
+
+    with pytest.raises(Exception):
+        client.generate(prompt="Q", context="C")
+
+    from uma.llm.client import MAX_RATE_LIMIT_RETRIES
+
+    assert completions.call_count == MAX_RATE_LIMIT_RETRIES + 1

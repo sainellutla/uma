@@ -405,6 +405,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Optional hard token budget applied after threshold filtering.",
     )
 
+    calibrate_parser = sub.add_parser(
+        "calibrate", help="Sweep relevance thresholds to find the minimum sufficient context."
+    )
+    calibrate_parser.add_argument(
+        "--thresholds",
+        default=None,
+        help="Comma-separated thresholds to test (default: 0.20,0.35,0.50,0.65,0.80).",
+    )
+    calibrate_parser.add_argument(
+        "--benchmark",
+        default=None,
+        help="Path to a benchmark JSON file (default: examples/benchmark.json).",
+    )
+    calibrate_parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=None,
+        help="Optional hard token budget applied after threshold filtering.",
+    )
+
     return parser
 
 
@@ -414,6 +434,14 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.command == "judge":
         sys.exit(run_judge(query=args.query, threshold=args.threshold, max_tokens=args.max_tokens))
+
+    if args.command == "calibrate":
+        from uma.cli.calibrate import run_calibrate
+
+        thresholds = (
+            [float(t) for t in args.thresholds.split(",")] if args.thresholds else None
+        )
+        sys.exit(run_calibrate(thresholds=thresholds, benchmark_path=args.benchmark, max_tokens=args.max_tokens))
 
     parser.print_help()
     sys.exit(0)

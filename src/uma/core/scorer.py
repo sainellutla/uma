@@ -81,10 +81,16 @@ def split_sentences(text: str) -> list[str]:
 class ScoredSentence:
     """A single sentence with its cross-encoder relevance score.
 
-    ``score`` is normalized to [0, 1] via a sigmoid applied to the raw
-    cross-encoder logit, so a ``threshold`` of 0.5 has a consistent meaning
-    ("the cross-encoder judges this sentence more relevant than not") across
-    queries and contexts.
+    ``score`` is a sigmoid applied to the raw cross-encoder logit, squashed
+    to [0, 1] purely for a bounded, consistent scale to threshold against —
+    NOT a calibrated probability. ms-marco-MiniLM-L-6-v2 is documented as a
+    ranking model (pass/passage pairs get a raw score, sorted highest to
+    lowest); its model card makes no claim that those scores, sigmoid or
+    otherwise, correspond to "probability of relevance." Treat ``score`` as
+    a normalized relevance score, and ``threshold`` as an operating point on
+    it — 0.5 is simply Uma's default operating threshold, not "50% likely
+    relevant." See :mod:`uma.core.calibrate` for finding a threshold
+    empirically rather than assuming 0.5 is right for a given workload.
     """
 
     index: int

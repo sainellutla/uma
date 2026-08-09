@@ -1,0 +1,40 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Cache Hugging Face model weights
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-cache-cross-encoder-ms-marco-MiniLM-L-6-v2
+
+      - name: Install Uma (dev)
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        # No LLM API key is configured or required here: every test that
+        # touches the LLM client uses a monkeypatched transport (see
+        # tests/test_llm.py, test_calibrate.py). Only the local
+        # cross-encoder is real, downloaded fresh (or from cache above) on
+        # first use.
+        run: pytest -q

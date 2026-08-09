@@ -9,3 +9,4 @@ dist/
 .mypy_cache/
 render.exe
 render_dev.*
+*.log
